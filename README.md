@@ -1,6 +1,6 @@
 
 <p align="center">
-  <img src="assets/cloner-icon.png" alt="Server Cloner" width="100">
+  <img src="assets/cloner-icon.PNG" alt="Server Cloner" width="100">
 </p>
 
 <h1 align="center">Server Cloner</h1>
