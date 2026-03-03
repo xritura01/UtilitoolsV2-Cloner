@@ -67,7 +67,7 @@ class UtilityClonerFunctions:
         self.target_guild_id = target_guild_id
         self.session = tls_client.Session(
             client_identifier="chrome_120",
-            random_tls_ext=True
+            random_tls_extension_order=True
         )
         self.headers = self.get_headers()
         self.category_map = {}
@@ -885,3 +885,4 @@ class UtilityClonerMenu:
 
 if __name__ == "__main__":
     UtilityClonerMenu()
+
