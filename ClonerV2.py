@@ -1,64 +1,160 @@
-# i lowk speedcoded ts at 5 am so if something breaks just dm xritura_01 on discord or xritura01 on telegram 
-# Dont enter bot token . you need real user tokens for this to work . Token must be in both servers (you want to clone / where you want to clone to)
-# Also make sure your account has admin permissions in server you want to clone in / paste in 
-# put user token in data/token.txt file
-# here is yt tutorial on how to get token : https://youtu.be/GUqSNoJ28aU?si=-J1QNKuS4wJDpkrz
-
 import os
+import re
 import sys
 import time
 import json
 import base64
 import shutil
 import requests
-import threading
 import urllib3
-import random 
 import tls_client
+from os import get_terminal_size
 from pystyle import Colorate, Colors
-from discord import Permissions
 from colorama import Fore, init, Style
 from concurrent.futures import ThreadPoolExecutor
-from requests.exceptions import SSLError
 
 urllib3.disable_warnings()
 init(autoreset=True)
 
-def gradient_text_success(text, speed=1):
-    return Colorate.Horizontal(Colors.green_to_white, text, speed)
+def gradient_text(text):
+    return Colorate.Horizontal(Colors.green_to_cyan, text, 1)
 
-def gradient_text_options(text: str, start_rgb=(100, 100, 100), end_rgb=(255, 255, 255)) -> str:
-    length = len(text)
-    result = ""
+def get_time():
+    return time.strftime("%H:%M:%S")
 
-    for i, char in enumerate(text):
-        if char == " ":
-            result += char
+def clear():
+    os.system("cls" if os.name == "nt" else "clear")
+
+
+class UtilityLogger:
+    def __init__(self):
+        self._o = gradient_text("[")
+        self._c = gradient_text("]")
+        self._arrow = gradient_text("~>")
+
+    def _bracket(self, inner):
+        return f"{self._o} {inner} {self._c}"
+
+    def _time_b(self):
+        return self._bracket(f"{Fore.WHITE}{get_time()}{Style.RESET_ALL}")
+
+    def _brand_b(self):
+        return self._bracket(f"{Fore.WHITE}UtilityToolsV2{Style.RESET_ALL}")
+
+    def success(self, text, detail=None):
+        sym = f"{Fore.GREEN} + {Style.RESET_ALL}"
+        status = f"{Fore.LIGHTGREEN_EX}Action was Successful{Style.RESET_ALL}"
+        det = f" {Fore.WHITE}| {Fore.LIGHTGREEN_EX}{detail}{Style.RESET_ALL}" if detail else ""
+        print(f"      {self._time_b()} {sym} {Fore.WHITE}{text}{Style.RESET_ALL}{det} {self._arrow} {status}")
+
+    def error(self, text, detail=None):
+        sym = f"{Fore.RED} ! {Style.RESET_ALL}"
+        status = f"{Fore.LIGHTRED_EX}Action Failed{Style.RESET_ALL}"
+        det = f" {Fore.WHITE}| {Fore.LIGHTRED_EX}{detail}{Style.RESET_ALL}" if detail else ""
+        print(f"      {self._time_b()} {sym} {Fore.WHITE}{text}{Style.RESET_ALL}{det} {self._arrow} {status}")
+
+    def info(self, text, detail=None):
+        sym = f"{Fore.CYAN} * {Style.RESET_ALL}"
+        det = f" {Fore.WHITE}| {Fore.LIGHTCYAN_EX}{detail}{Style.RESET_ALL}" if detail else ""
+        print(f"      {self._time_b()} {sym} {Fore.WHITE}{text}{Style.RESET_ALL}{det}")
+
+    def clone(self, kind, name, response):
+        sym = f"{Fore.CYAN} * {Style.RESET_ALL}"
+        print(
+            f"      {self._time_b()} {sym} "
+            f"{Fore.LIGHTCYAN_EX}{kind}{Style.RESET_ALL} {self._arrow} "
+            f"{Fore.WHITE}{name}{Style.RESET_ALL} "
+            f"{Fore.WHITE}|{Style.RESET_ALL} "
+            f"{Fore.GREEN}{response}{Style.RESET_ALL} cloned"
+        )
+
+    def ratelimit(self, seconds):
+        sym = f"{Fore.YELLOW} ~ {Style.RESET_ALL}"
+        print(f"      {self._time_b()} {sym} {Fore.YELLOW}Rate limited — sleeping {seconds:.1f}s{Style.RESET_ALL}")
+
+    def input(self, text_label=None):
+        txt = f"{Fore.WHITE}{text_label}{Style.RESET_ALL} " if text_label else ""
+        return input(f"      {self._brand_b()} {txt}{self._arrow} ").strip()
+
+    def confirm(self, text_label=None):
+        choices = f"{Fore.WHITE}({Fore.GREEN}y{Fore.WHITE}/{Fore.RED}n{Fore.WHITE}){Style.RESET_ALL}"
+        txt = f"{Fore.WHITE}{text_label}{Style.RESET_ALL} " if text_label else ""
+        return input(f"      {self._brand_b()} {txt}{choices} {self._arrow} ").strip().lower() == "y"
+
+    def wait(self):
+        input(f"      {self._brand_b()} {Fore.WHITE}Press Enter to return...{Style.RESET_ALL} {self._arrow} ")
+
+
+log = UtilityLogger()
+
+
+def set_title(title):
+    if os.name == "nt":
+        os.system(f"title {title}")
+    else:
+        sys.stdout.write(f"\033]0;{title}\007")
+        sys.stdout.flush()
+
+
+def validate_token(token):
+    try:
+        r = requests.get(
+            "https://discord.com/api/v9/users/@me",
+            headers={"Authorization": token},
+            timeout=8
+        )
+        if r.status_code == 200:
+            return r.json()
+        return None
+    except Exception:
+        return None
+
+
+def load_or_prompt_token():
+    os.makedirs("data", exist_ok=True)
+    token_path = "data/token.txt"
+
+    if os.path.isfile(token_path):
+        with open(token_path, "r") as f:
+            token = f.read().strip()
+        if token:
+            log.info("Token found, validating...")
+            user = validate_token(token)
+            if user:
+                return token, user
+            log.error("Saved token is invalid or expired")
+
+    while True:
+        print()
+        token = log.input("Enter your Discord token")
+        if not token:
+            log.error("Token cannot be empty")
             continue
-        factor = i / max(length - 1, 1)
-        r = int(start_rgb[0] + (end_rgb[0] - start_rgb[0]) * factor)
-        g = int(start_rgb[1] + (end_rgb[1] - start_rgb[1]) * factor)
-        b = int(start_rgb[2] + (end_rgb[2] - start_rgb[2]) * factor)
-        result += f"\033[38;2;{r};{g};{b}m{char}"
+        log.info("Validating token...")
+        user = validate_token(token)
+        if user:
+            with open(token_path, "w") as f:
+                f.write(token)
+            log.success("Token saved to data/token.txt")
+            return token, user
+        log.error("Invalid token", detail="Check the token and try again")
 
-    return result + Style.RESET_ALL
 
-def gradient_text_failer(text, speed=1):
-    return Colorate.Horizontal(Colors.red_to_white, text, speed)
-
-def gradient_text_ascii(text, speed=1):
-    return Colorate.Horizontal(Colors.purple_to_red, text, speed)
-
-def safe_post(session, url, headers, json_data):
-    tries = 0
-    while tries < 3:
+def safe_request(fn, *args, retries=3, **kwargs):
+    for _ in range(retries):
         try:
-            return session.post(url, headers=headers, json=json_data)
+            r = fn(*args, **kwargs)
+            if r.status_code == 429:
+                wait = r.json().get("retry_after", 1) + 0.5
+                log.ratelimit(wait)
+                time.sleep(wait)
+                continue
+            return r
         except Exception as e:
-            print(gradient_text_failer(f"[ERROR] Retrying... ({e})"))
-            tries += 1
+            log.error("Request failed", detail=str(e))
             time.sleep(1.5)
     return None
+
 
 class UtilityClonerFunctions:
     def __init__(self, token, source_guild_id, target_guild_id):
@@ -67,821 +163,604 @@ class UtilityClonerFunctions:
         self.target_guild_id = target_guild_id
         self.session = tls_client.Session(
             client_identifier="chrome_120",
-            random_tls_extension_order=True
+            random_tls_extension_order=True,
+            ja3_string="771,4865-4866-4867-49195-49199-49196-49200-52393-52392-49171-49172-156-157-47-53,0-23-65281-10-11-35-16-5-13-18-51-45-43-27-21,29-23-24,0",
+            h2_settings={
+                "HEADER_TABLE_SIZE": 65536,
+                "MAX_CONCURRENT_STREAMS": 1000,
+                "INITIAL_WINDOW_SIZE": 6291456,
+                "MAX_FRAME_SIZE": 16384,
+                "MAX_HEADER_LIST_SIZE": 262144
+            },
+            h2_settings_order=[
+                "HEADER_TABLE_SIZE", "MAX_CONCURRENT_STREAMS",
+                "INITIAL_WINDOW_SIZE", "MAX_FRAME_SIZE", "MAX_HEADER_LIST_SIZE"
+            ],
+            supported_signature_algorithms=[
+                "ECDSAWithP256AndSHA256", "PSSWithSHA256", "PKCS1WithSHA256",
+                "ECDSAWithP384AndSHA384", "PSSWithSHA384", "PKCS1WithSHA384",
+                "PSSWithSHA512", "PKCS1WithSHA512"
+            ],
+            supported_versions=["GREASE", "1.3", "1.2"],
+            key_share_curves=["GREASE", "X25519"],
+            cert_compression_algo="brotli",
+            pseudo_header_order=[":method", ":authority", ":scheme", ":path"],
+            connection_flow=15663105
         )
-        self.headers = self.get_headers()
+        self.session.headers = self._get_headers()
         self.category_map = {}
         os.makedirs("backups", exist_ok=True)
-# Just saying before hand if you try to use these headers for a joiner or something 
-# These might work but wont be undetectable since they are made for a cloner and not a joiner so yeah dont do that
-# i just made these for the cloner so they arent detailed much blah bah 
-    def get_headers(self):
-        build_num = random.randint(265000, 267000)
-        ua = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-        
-        props = base64.b64encode(json.dumps({
+
+    def _build_super_props(self):
+        return {
             "os": "Windows",
             "browser": "Chrome",
             "device": "",
             "system_locale": "en-US",
-            "browser_user_agent": ua,
+            "browser_user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
             "browser_version": "120.0.0.0",
             "os_version": "10",
-            "referrer": "",
-            "referring_domain": "",
+            "referrer": "https://discord.com/",
+            "referring_domain": "discord.com",
             "referrer_current": "",
             "referring_domain_current": "",
             "release_channel": "stable",
-            "client_build_number": build_num,
-            "client_event_source": None
-        }).encode()).decode()
+            "client_build_number": 267860,
+            "client_event_source": None,
+            "design_id": 0,
+            "native_build_number": None,
+            "client_performance_cpu_cores": 8,
+            "client_performance_memory": 16384,
+            "accessibility_features": 0,
+            "has_ever_used_accessibility_features": False,
+            "has_client_mods": False
+        }
 
+    def _get_headers(self):
+        encoded = base64.b64encode(
+            json.dumps(self._build_super_props(), separators=(",", ":")).encode()
+        ).decode()
         return {
-            "authority": "discord.com",
-            "method": "GET",
-            "path": "/api/v9/users/@me",
-            "scheme": "https",
             "accept": "*/*",
             "accept-encoding": "gzip, deflate, br",
             "accept-language": "en-US,en;q=0.9",
             "authorization": self.token,
             "content-type": "application/json",
             "origin": "https://discord.com",
-            "referer": "https://discord.com/channels/@me",
-            "sec-ch-ua": '"Not_A Brand";v="8", "Chromium";v="120", "Google Chrome";v="120"',
+            "referer": f"https://discord.com/channels/{self.source_guild_id}/@home",
+            "sec-ch-ua": '"Google Chrome";v="120", "Chromium";v="120", "Not_A Brand";v="24"',
             "sec-ch-ua-mobile": "?0",
             "sec-ch-ua-platform": '"Windows"',
             "sec-fetch-dest": "empty",
             "sec-fetch-mode": "cors",
             "sec-fetch-site": "same-origin",
-            "user-agent": ua,
+            "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
             "x-debug-options": "bugReporterEnabled",
             "x-discord-locale": "en-US",
             "x-discord-timezone": "America/New_York",
-            "x-super-properties": props
+            "x-super-properties": encoded
         }
+
+    def _get(self, path):
+        return safe_request(self.session.get, f"https://discord.com/api/v9{path}")
+
+    def _post(self, path, payload):
+        return safe_request(self.session.post, f"https://discord.com/api/v9{path}", json=payload)
+
+    def _patch(self, path, payload):
+        return safe_request(self.session.patch, f"https://discord.com/api/v9{path}", json=payload)
 
     def fetch_source_channels(self):
-        url = f"https://discord.com/api/v9/guilds/{self.source_guild_id}/channels"
-        r = self.session.get(url, headers=self.headers)
-        if r.status_code == 200:
+        r = self._get(f"/guilds/{self.source_guild_id}/channels")
+        if r and r.status_code == 200:
             return r.json()
-        else:
-            print(gradient_text_failer(f"[x] Failed to fetch source channels: {r.text}"))
-            return []
+        log.error("Fetch source channels", detail=r.text if r else "no response")
+        return []
 
     def create_category_in_target(self, category):
-        payload = {
-            "name": category['name'],
-            "type": 4,
-            "position": category['position']
-        }
-
-        url = f"https://discord.com/api/v9/guilds/{self.target_guild_id}/channels"
-        r = safe_post(self.session, url, headers=self.headers, json_data=payload)
-
-        if r.status_code == 201:
-            new_cat_id = r.json()['id']
-            self.category_map[category['id']] = new_cat_id
-            print(gradient_text_success(f"[+] Created category: {category['name']}"))
-        elif r.status_code == 429:
-            print(gradient_text_failer("[RATELIMIT] Api is in mood clearly"))
-            retry_after = r.json().get("retry_after", 1)
-            time.sleep(retry_after + 0.5)
-            self.create_category_in_target(category)
+        r = self._post(f"/guilds/{self.target_guild_id}/channels", {
+            "name": category["name"], "type": 4, "position": category["position"]
+        })
+        if r and r.status_code == 201:
+            self.category_map[category["id"]] = r.json()["id"]
+            log.clone("Category", category["name"], 201)
         else:
-            print(gradient_text_failer(f"[x] Failed to create category {category['name']}: {r.text}"))
-
+            log.error(f"Category {category['name']}", detail=r.text if r else "no response")
         time.sleep(0.10)
 
     def create_channel_in_target(self, channel):
-        if channel['type'] == 4:
+        if channel["type"] == 4:
             return
-
-        parent_id = self.category_map.get(channel.get('parent_id'))
-
-        payload = {
-            "name": channel['name'],
-            "type": channel['type'],
-            "topic": channel.get('topic'),
-            "nsfw": channel.get('nsfw', False),
-            "bitrate": channel.get('bitrate'),
-            "user_limit": channel.get('user_limit'),
-            "rate_limit_per_user": channel.get('rate_limit_per_user', 0),
-            "position": channel['position'],
-            "parent_id": parent_id
-        }
-
-        url = f"https://discord.com/api/v9/guilds/{self.target_guild_id}/channels"
-        r = self.session.post(url, headers=self.headers, json=payload)
-
-        if r.status_code == 201:
-            print(gradient_text_success(f"[+] Created channel: {channel['name']}"))
-        elif r.status_code == 429:
-            print(gradient_text_failer("[RATELIMIT] Api is in mood clearly"))
-            retry_after = r.json().get("retry_after", 1)
-            time.sleep(retry_after + 0.5)
-            self.create_channel_in_target(channel)
+        r = self._post(f"/guilds/{self.target_guild_id}/channels", {
+            "name": channel["name"],
+            "type": channel["type"],
+            "topic": channel.get("topic"),
+            "nsfw": channel.get("nsfw", False),
+            "bitrate": channel.get("bitrate"),
+            "user_limit": channel.get("user_limit"),
+            "rate_limit_per_user": channel.get("rate_limit_per_user", 0),
+            "position": channel["position"],
+            "parent_id": self.category_map.get(channel.get("parent_id"))
+        })
+        if r and r.status_code == 201:
+            log.clone("Channel", channel["name"], 201)
         else:
-            print(gradient_text_failer(f"[x] Failed to create channel {channel['name']}: {r.text}"))
-
+            log.error(f"Channel {channel['name']}", detail=r.text if r else "no response")
         time.sleep(0.10)
 
     def clone_channels(self):
         channels = self.fetch_source_channels()
         if not channels:
             return
-
-        categories = [c for c in channels if c["type"] == 4]
-        others = [c for c in channels if c["type"] != 4]
-
-        print(gradient_text_success(f"[~] Creating {len(categories)} categories first..."))
-        for category in categories:
-            self.create_category_in_target(category)
-
-        print(gradient_text_success(f"[~] Creating {len(others)} channels with hierarchy..."))
-        with ThreadPoolExecutor(max_workers=3) as executor:
-            for channel in others:
-                executor.submit(self.create_channel_in_target, channel)
+        categories = sorted([c for c in channels if c["type"] == 4], key=lambda x: x["position"])
+        others = sorted([c for c in channels if c["type"] != 4], key=lambda x: x["position"])
+        log.info(f"Creating {len(categories)} categories")
+        for cat in categories:
+            self.create_category_in_target(cat)
+        log.info(f"Creating {len(others)} channels")
+        with ThreadPoolExecutor(max_workers=1) as ex:
+            for ch in others:
+                ex.submit(self.create_channel_in_target, ch)
 
     def clone_server_details(self):
-        print(gradient_text_ascii("[~] Cloning server name and icon..."))
-
-        url = f"https://discord.com/api/v9/guilds/{self.source_guild_id}"
-        r = self.session.get(url, headers=self.headers)
-        if r.status_code != 200:
-            print(gradient_text_failer(f"[x] Failed to fetch source guild: {r.text}"))
+        log.info("Cloning server name and icon")
+        r = self._get(f"/guilds/{self.source_guild_id}")
+        if not r or r.status_code != 200:
+            log.error("Fetch source guild", detail=r.text if r else "no response")
             return
-
         guild = r.json()
-        name = guild.get("name", "Cloned Server")
-        icon_hash = guild.get("icon")
-
-        icon_payload = None
-        if icon_hash:
-            icon_url = f"https://cdn.discordapp.com/icons/{self.source_guild_id}/{icon_hash}.png"
+        payload = {"name": guild.get("name", "Cloned Server")}
+        if guild.get("icon"):
             try:
-                icon_data = requests.get(icon_url).content
-                icon_base64 = base64.b64encode(icon_data).decode("utf-8")
-                icon_payload = f"data:image/png;base64,{icon_base64}"
+                data = requests.get(
+                    f"https://cdn.discordapp.com/icons/{self.source_guild_id}/{guild['icon']}.png"
+                ).content
+                payload["icon"] = f"data:image/png;base64,{base64.b64encode(data).decode()}"
             except Exception as e:
-                print(gradient_text_failer(f"[x] Failed to fetch or encode icon: {e}"))
-
-        payload = {"name": name}
-        if icon_payload:
-            payload["icon"] = icon_payload
-
-        patch_url = f"https://discord.com/api/v9/guilds/{self.target_guild_id}"
-        r = self.session.patch(patch_url, headers=self.headers, json=payload)
-
-        if r.status_code == 200:
-            print(gradient_text_success(f"[✓] Server name and icon cloned successfully!"))
+                log.error("Fetch icon", detail=str(e))
+        r = self._patch(f"/guilds/{self.target_guild_id}", payload)
+        if r and r.status_code == 200:
+            log.clone("Server", guild.get("name", "?"), 200)
         else:
-            print(gradient_text_failer(f"[x] Failed to update server: {r.text}"))
+            log.error("Update server details", detail=r.text if r else "no response")
 
     def clone_roles(self):
-        print(gradient_text_ascii("[~] Cloning roles with hierarchy and permissions..."))
-
-        url = f"https://discord.com/api/v9/guilds/{self.source_guild_id}/roles"
-        r = self.session.get(url, headers=self.headers)
-        if r.status_code != 200:
-            print(gradient_text_failer(f"[x] Failed to fetch source roles: {r.text}"))
+        log.info("Cloning roles")
+        r = self._get(f"/guilds/{self.source_guild_id}/roles")
+        if not r or r.status_code != 200:
+            log.error("Fetch source roles", detail=r.text if r else "no response")
             return
-
-        roles = r.json()
-        roles = sorted(roles, key=lambda x: x["position"], reverse=True)
-
-        created_roles = []
-
+        roles = sorted([ro for ro in r.json() if ro["name"] != "@everyone"], key=lambda x: x["position"], reverse=True)
+        created = []
         for role in roles:
-            if role["name"] == "@everyone":
-                continue
-
-            payload = {
-                "name": role["name"],
-                "permissions": role["permissions"],
-                "color": role["color"],
-                "hoist": role["hoist"],
-                "mentionable": role["mentionable"]
-            }
-
-            url = f"https://discord.com/api/v9/guilds/{self.target_guild_id}/roles"
-            r = self.session.post(url, headers=self.headers, json=payload)
-
-            if r.status_code == 200 or r.status_code == 201:
-                created = r.json()
-                created_roles.append(created)
-                print(gradient_text_success(f"[+] Created role: {role['name']}"))
-            elif r.status_code == 429:
-                print(gradient_text_failer("[RATELIMIT] Too fast. Retrying..."))
-                retry_after = r.json().get("retry_after", 1)
-                time.sleep(retry_after + 0.5)
-                roles.insert(0, role) 
+            r = self._post(f"/guilds/{self.target_guild_id}/roles", {
+                "name": role["name"], "permissions": role["permissions"],
+                "color": role["color"], "hoist": role["hoist"], "mentionable": role["mentionable"]
+            })
+            if r and r.status_code in [200, 201]:
+                created.append(r.json())
+                log.clone("Role", role["name"], r.status_code)
             else:
-                print(gradient_text_failer(f"[x] Failed to create role {role['name']}: {r.text}"))
-
+                log.error(f"Role {role['name']}", detail=r.text if r else "no response")
             time.sleep(0.25)
-
-        if created_roles:
-            patch_url = f"https://discord.com/api/v9/guilds/{self.target_guild_id}/roles"
-            role_positions = [{"id": r["id"], "position": r["position"]} for r in created_roles]
-            r = self.session.patch(patch_url, headers=self.headers, json=role_positions)
-            if r.status_code in [200, 204]:
-                print(gradient_text_success("[✓] Role positions updated"))
-            else:
-                print(gradient_text_failer(f"[x] Failed to set role positions: {r.text}"))
+        if created:
+            r = self._patch(f"/guilds/{self.target_guild_id}/roles",
+                            [{"id": ro["id"], "position": ro["position"]} for ro in created])
+            if r and r.status_code in [200, 204]:
+                log.success("Role positions updated")
 
     def clone_emojis(self):
-        print(gradient_text_ascii("[~] Cloning emojis from source server..."))
-
-        fetch_url = f"https://discord.com/api/v9/guilds/{self.source_guild_id}/emojis"
-        r = self.session.get(fetch_url, headers=self.headers)
-        if r.status_code != 200:
-            print(gradient_text_failer(f"[x] Failed to fetch source emojis: {r.text}"))
+        log.info("Cloning emojis")
+        r = self._get(f"/guilds/{self.source_guild_id}/emojis")
+        if not r or r.status_code != 200:
+            log.error("Fetch source emojis", detail=r.text if r else "no response")
             return
-
-        emojis = r.json()
-        if not emojis:
-            print(gradient_text_failer("[x] No emojis found in source server"))
-            return
-
-        for emoji in emojis:
-            emoji_name = emoji["name"]
-            image_url = f"https://cdn.discordapp.com/emojis/{emoji['id']}.{'gif' if emoji['animated'] else 'png'}"
-
+        for emoji in r.json():
+            ext = "gif" if emoji["animated"] else "png"
             try:
-                img_data = requests.get(image_url).content
-                b64_image = f"data:image/{'gif' if emoji['animated'] else 'png'};base64,{base64.b64encode(img_data).decode()}"
+                data = requests.get(f"https://cdn.discordapp.com/emojis/{emoji['id']}.{ext}").content
+                b64 = f"data:image/{ext};base64,{base64.b64encode(data).decode()}"
             except Exception as e:
-                print(gradient_text_failer(f"[x] Failed to fetch emoji {emoji_name}: {e}"))
+                log.error(f"Fetch emoji {emoji['name']}", detail=str(e))
                 continue
-
-            payload = {
-                "name": emoji_name,
-                "image": b64_image
-            }
-
-            upload_url = f"https://discord.com/api/v9/guilds/{self.target_guild_id}/emojis"
-            r = self.session.post(upload_url, headers=self.headers, json=payload)
-
-            if r.status_code in [200, 201]:
-                print(gradient_text_success(f"[+] Cloned emoji: {emoji_name}"))
-            elif r.status_code == 400 and "maximum number of emojis" in r.text.lower():
-                print(gradient_text_failer("[x] No more emoji slots left! Stopping clone."))
+            r2 = self._post(f"/guilds/{self.target_guild_id}/emojis", {"name": emoji["name"], "image": b64})
+            if r2 and r2.status_code in [200, 201]:
+                log.clone("Emoji", emoji["name"], r2.status_code)
+            elif r2 and r2.status_code == 400 and "maximum number of emojis" in r2.text.lower():
+                log.error("Emoji slots full — stopping")
                 break
-            elif r.status_code == 429:
-                retry_after = r.json().get("retry_after", 1)
-                print(gradient_text_failer("[RATELIMIT] Sleeping before retry..."))
-                time.sleep(retry_after + 0.5)
-                continue
             else:
-                print(gradient_text_failer(f"[x] Failed to upload emoji {emoji_name}: {r.text}"))
-
+                log.error(f"Upload emoji {emoji['name']}", detail=r2.text if r2 else "no response")
             time.sleep(0.25)
-            
-    def create_backup(self):
-        if not self.source_guild_id:
-            print(gradient_text_failer("[x] No source guild ID provided"))
-            return
 
-        backup = {}
-        guild_url = f"https://discord.com/api/v9/guilds/{self.source_guild_id}"
-        r = self.session.get(guild_url, headers=self.headers)
-        if r.status_code != 200:
-            print(gradient_text_failer(f"[x] Failed to fetch guild: {r.text}"))
+    def clone_stickers(self):
+        log.info("Cloning stickers")
+        r = self._get(f"/guilds/{self.source_guild_id}/stickers")
+        if not r or r.status_code != 200:
+            log.error("Fetch source stickers", detail=r.text if r else "no response")
+            return
+        for sticker in r.json():
+            name = sticker.get("name", "sticker")
+            ext = "json" if sticker.get("format_type") == 3 else "png"
+            try:
+                data = requests.get(f"https://cdn.discordapp.com/stickers/{sticker['id']}.{ext}").content
+                b64 = f"data:image/png;base64,{base64.b64encode(data).decode()}"
+            except Exception as e:
+                log.error(f"Fetch sticker {name}", detail=str(e))
+                continue
+            r2 = self._post(f"/guilds/{self.target_guild_id}/stickers", {
+                "name": name, "description": sticker.get("description", ""),
+                "tags": sticker.get("tags", ""), "file": b64
+            })
+            if r2 and r2.status_code == 201:
+                log.clone("Sticker", name, 201)
+            elif r2 and r2.json().get("code") == 30039:
+                log.error("Sticker slots full — stopping")
+                return
+            else:
+                log.error(f"Upload sticker {name}", detail=r2.text if r2 else "no response")
+            time.sleep(1.0)
+
+    def clone_nsfw_flags(self):
+        log.info("Cloning NSFW flags")
+        src = self._get(f"/guilds/{self.source_guild_id}/channels")
+        tgt = self._get(f"/guilds/{self.target_guild_id}/channels")
+        if not src or src.status_code != 200 or not tgt or tgt.status_code != 200:
+            log.error("Fetch channels for NSFW clone")
+            return
+        name_map = {ch["name"]: ch["id"] for ch in tgt.json()}
+        for ch in src.json():
+            tgt_id = name_map.get(ch["name"])
+            if tgt_id and ch.get("nsfw") is not None:
+                r = self._patch(f"/channels/{tgt_id}", {"nsfw": ch["nsfw"]})
+                if r and r.status_code == 200:
+                    log.clone("NSFW", ch["name"], 200)
+                else:
+                    log.error(f"NSFW {ch['name']}", detail=r.text if r else "no response")
+                time.sleep(1.5)
+
+    def clone_webhooks(self):
+        log.info("Cloning webhooks")
+        src = self._get(f"/guilds/{self.source_guild_id}/channels")
+        tgt = self._get(f"/guilds/{self.target_guild_id}/channels")
+        if not src or src.status_code != 200 or not tgt or tgt.status_code != 200:
+            log.error("Fetch channels for webhook clone")
+            return
+        name_map = {ch["name"]: ch["id"] for ch in tgt.json()}
+        for ch in src.json():
+            wh_r = self._get(f"/channels/{ch['id']}/webhooks")
+            if not wh_r or wh_r.status_code != 200:
+                continue
+            for wh in wh_r.json():
+                tgt_id = name_map.get(ch["name"])
+                if tgt_id:
+                    r = self._post(f"/channels/{tgt_id}/webhooks", {"name": wh["name"], "avatar": wh.get("avatar")})
+                    if r and r.status_code == 200:
+                        log.clone("Webhook", wh["name"], 200)
+                    else:
+                        log.error(f"Webhook {wh['name']}", detail=r.text if r else "no response")
+                    time.sleep(1.5)
+
+    def create_backup(self):
+        log.info(f"Creating backup for {self.source_guild_id}")
+        r = self._get(f"/guilds/{self.source_guild_id}")
+        if not r or r.status_code != 200:
+            log.error("Fetch guild for backup", detail=r.text if r else "no response")
             return
         guild = r.json()
-        icon_base64 = None
+        backup = {}
+        icon_b64 = None
         if guild.get("icon"):
-            icon_url = f"https://cdn.discordapp.com/icons/{self.source_guild_id}/{guild['icon']}.png"
             try:
-                icon_data = requests.get(icon_url).content
-                icon_base64 = f"data:image/png;base64,{base64.b64encode(icon_data).decode()}"
+                data = requests.get(
+                    f"https://cdn.discordapp.com/icons/{self.source_guild_id}/{guild['icon']}.png"
+                ).content
+                icon_b64 = f"data:image/png;base64,{base64.b64encode(data).decode()}"
             except:
                 pass
-        backup["server_details"] = {
-            "name": guild.get("name", "Cloned Server"),
-            "icon": icon_base64
-        }
+        backup["server_details"] = {"name": guild.get("name", "Cloned Server"), "icon": icon_b64}
 
-        roles_url = f"{guild_url}/roles"
-        r = self.session.get(roles_url, headers=self.headers)
-        if r.status_code == 200:
-            roles = [role for role in r.json() if role["name"] != "@everyone"]
-            backup["roles"] = [{
-                "name": role["name"],
-                "permissions": role["permissions"],
-                "color": role["color"],
-                "hoist": role["hoist"],
-                "mentionable": role["mentionable"],
-                "position": role["position"]
-            } for role in roles]
-        else:
-            backup["roles"] = []
+        r = self._get(f"/guilds/{self.source_guild_id}/roles")
+        backup["roles"] = [
+            {k: ro[k] for k in ["name", "permissions", "color", "hoist", "mentionable", "position"]}
+            for ro in (r.json() if r and r.status_code == 200 else [])
+            if ro["name"] != "@everyone"
+        ]
 
-        channels_url = f"{guild_url}/channels"
-        r = self.session.get(channels_url, headers=self.headers)
-        if r.status_code == 200:
-            channels = r.json()
-            backup["categories"] = [{
-                "id": c["id"],
-                "name": c["name"],
-                "position": c["position"]
-            } for c in channels if c["type"] == 4]
+        r = self._get(f"/guilds/{self.source_guild_id}/channels")
+        channels = r.json() if r and r.status_code == 200 else []
+        backup["categories"] = [{"id": c["id"], "name": c["name"], "position": c["position"]} for c in channels if c["type"] == 4]
+        backup["channels"] = [{
+            "name": c["name"], "type": c["type"], "topic": c.get("topic"),
+            "nsfw": c.get("nsfw", False), "bitrate": c.get("bitrate"),
+            "user_limit": c.get("user_limit"), "rate_limit_per_user": c.get("rate_limit_per_user", 0),
+            "position": c["position"], "parent_id": c.get("parent_id")
+        } for c in channels if c["type"] != 4]
 
-            backup["channels"] = [{
-                "name": c["name"],
-                "type": c["type"],
-                "topic": c.get("topic"),
-                "nsfw": c.get("nsfw", False),
-                "bitrate": c.get("bitrate"),
-                "user_limit": c.get("user_limit"),
-                "rate_limit_per_user": c.get("rate_limit_per_user", 0),
-                "position": c["position"],
-                "parent_id": c.get("parent_id")
-            } for c in channels if c["type"] != 4]
-        else:
-            backup["categories"], backup["channels"] = [], []
+        r = self._get(f"/guilds/{self.source_guild_id}/emojis")
+        emojis = []
+        for e in (r.json() if r and r.status_code == 200 else []):
+            try:
+                ext = "gif" if e["animated"] else "png"
+                data = requests.get(f"https://cdn.discordapp.com/emojis/{e['id']}.{ext}").content
+                emojis.append({"name": e["name"], "image": f"data:image/{ext};base64,{base64.b64encode(data).decode()}"})
+            except:
+                pass
+        backup["emojis"] = emojis
 
-        emoji_url = f"{guild_url}/emojis"
-        r = self.session.get(emoji_url, headers=self.headers)
-        if r.status_code == 200:
-            emojis = []
-            for e in r.json():
-                try:
-                    img_url = f"https://cdn.discordapp.com/emojis/{e['id']}.{'gif' if e['animated'] else 'png'}"
-                    img_data = requests.get(img_url).content
-                    img_b64 = f"data:image/{'gif' if e['animated'] else 'png'};base64,{base64.b64encode(img_data).decode()}"
-                    emojis.append({"name": e["name"], "image": img_b64})
-                except:
-                    pass
-            backup["emojis"] = emojis
-        else:
-            backup["emojis"] = []
-
-        backup_path = f"backups/{self.source_guild_id}.json"
-        with open(backup_path, "w", encoding="utf-8") as f:
+        path = f"backups/{self.source_guild_id}.json"
+        with open(path, "w", encoding="utf-8") as f:
             json.dump(backup, f, indent=4)
+        log.success("Backup saved", detail=path)
 
-        print(gradient_text_success(f"[✓] Backup saved to {backup_path}"))
-
-    def restore_from_backup(self, backup_filename):
-        backups_dir = "backups"
-        backup_file_path = os.path.join(backups_dir, backup_filename)
-
-        if not os.path.isfile(backup_file_path):
-            print(gradient_text_failer(f"[x] Backup file not found: {backup_filename}"))
+    def restore_from_backup(self, filename):
+        path = os.path.join("backups", filename)
+        if not os.path.isfile(path):
+            log.error("Backup file not found", detail=filename)
             return
-
-        with open(backup_file_path, "r", encoding="utf-8") as f:
+        with open(path, "r", encoding="utf-8") as f:
             backup = json.load(f)
         payload = {"name": backup["server_details"]["name"]}
         if backup["server_details"].get("icon"):
             payload["icon"] = backup["server_details"]["icon"]
-
-        patch_url = f"https://discord.com/api/v9/guilds/{self.target_guild_id}"
-        r = self.session.patch(patch_url, headers=self.headers, json=payload)
-        if r.status_code in [200, 201]:
-            print(gradient_text_success("[✓] Server details restored"))
+        r = self._patch(f"/guilds/{self.target_guild_id}", payload)
+        if r and r.status_code in [200, 201]:
+            log.success("Server details restored")
         else:
-            print(gradient_text_failer(f"[x] Failed to restore server details: {r.text}"))
-
+            log.error("Restore server details", detail=r.text if r else "no response")
         for role in sorted(backup["roles"], key=lambda x: x["position"], reverse=True):
-            r = self.session.post(
-                f"https://discord.com/api/v9/guilds/{self.target_guild_id}/roles",
-                headers=self.headers,
-                json=role
-            )
-            if r.status_code in [200, 201]:
-                print(gradient_text_success(f"[+] Role created: {role['name']}"))
+            r = self._post(f"/guilds/{self.target_guild_id}/roles", role)
+            if r and r.status_code in [200, 201]:
+                log.clone("Role", role["name"], r.status_code)
             else:
-                print(gradient_text_failer(f"[x] Failed to create role {role['name']}: {r.text}"))
+                log.error(f"Restore role {role['name']}", detail=r.text if r else "no response")
             time.sleep(0.5)
         self.category_map = {}
         for cat in backup["categories"]:
-            payload = {"name": cat["name"], "type": 4, "position": cat["position"]}
-            r = self.session.post(
-                f"https://discord.com/api/v9/guilds/{self.target_guild_id}/channels",
-                headers=self.headers,
-                json=payload
-            )
-            if r.status_code == 201:
-                new_cat_id = r.json()["id"]
-                self.category_map[cat["id"]] = new_cat_id
-                print(gradient_text_success(f"[+] Category created: {cat['name']}"))
+            r = self._post(f"/guilds/{self.target_guild_id}/channels", {"name": cat["name"], "type": 4, "position": cat["position"]})
+            if r and r.status_code == 201:
+                self.category_map[cat["id"]] = r.json()["id"]
+                log.clone("Category", cat["name"], 201)
             else:
-                print(gradient_text_failer(f"[x] Failed to create category {cat['name']}: {r.text}"))
+                log.error(f"Restore category {cat['name']}", detail=r.text if r else "no response")
             time.sleep(0.5)
         for ch in backup["channels"]:
             payload = ch.copy()
             if ch.get("parent_id") in self.category_map:
                 payload["parent_id"] = self.category_map[ch["parent_id"]]
-            r = self.session.post(
-                f"https://discord.com/api/v9/guilds/{self.target_guild_id}/channels",
-                headers=self.headers,
-                json=payload
-            )
-            if r.status_code == 201:
-                print(gradient_text_success(f"[+] Channel created: {ch['name']}"))
+            r = self._post(f"/guilds/{self.target_guild_id}/channels", payload)
+            if r and r.status_code == 201:
+                log.clone("Channel", ch["name"], 201)
             else:
-                print(gradient_text_failer(f"[x] Failed to create channel {ch['name']}: {r.text}"))
+                log.error(f"Restore channel {ch['name']}", detail=r.text if r else "no response")
             time.sleep(0.5)
         for emoji in backup["emojis"]:
-            r = self.session.post(
-                f"https://discord.com/api/v9/guilds/{self.target_guild_id}/emojis",
-                headers=self.headers,
-                json=emoji
-            )
-            if r.status_code in [200, 201]:
-                print(gradient_text_success(f"[+] Emoji restored: {emoji['name']}"))
-            elif r.status_code == 400 and "maximum number" in r.text.lower():
-                print(gradient_text_failer("[x] Emoji slots full!"))
+            r = self._post(f"/guilds/{self.target_guild_id}/emojis", emoji)
+            if r and r.status_code in [200, 201]:
+                log.clone("Emoji", emoji["name"], r.status_code)
+            elif r and r.status_code == 400 and "maximum number" in r.text.lower():
+                log.error("Emoji slots full — stopping")
                 break
             else:
-                print(gradient_text_failer(f"[x] Failed to restore emoji {emoji['name']}: {r.text}"))
+                log.error(f"Restore emoji {emoji['name']}", detail=r.text if r else "no response")
             time.sleep(0.5)
-
-        print(gradient_text_success("[✓] Backup restoration complete"))
-
-    def clone_nsfw_flags(self):
-        src_url = f"https://discord.com/api/v9/guilds/{self.source_guild_id}/channels"
-        tgt_url = f"https://discord.com/api/v9/guilds/{self.target_guild_id}/channels"
-
-        r = self.session.get(src_url, headers=self.headers)
-        if r.status_code != 200:
-            print(gradient_text_failer(f"[x] Failed to fetch source channels: {r.text}"))
-            return
-
-        source_channels = r.json()
-        tr = self.session.get(tgt_url, headers=self.headers)
-        if tr.status_code != 200:
-            print(gradient_text_failer(f"[x] Failed to fetch target channels: {tr.text}"))
-            return
-
-        target_channels = tr.json()
-        name_map = {ch['name']: ch['id'] for ch in target_channels}
-
-        for src_ch in source_channels:
-            if src_ch.get('nsfw') is not None:
-                tgt_id = name_map.get(src_ch['name'])
-                if tgt_id:
-                    patch_data = {"nsfw": src_ch['nsfw']}
-                    pr = self.session.patch(f"{tgt_url}/{tgt_id}", headers=self.headers, json=patch_data)
-                    if pr.status_code == 200:
-                        print(gradient_text_success(f"[✓] Set NSFW flag for: {src_ch['name']}"))
-                    else:
-                        print(gradient_text_failer(f"[x] Failed to set NSFW for {src_ch['name']}: {pr.text}"))
-                    time.sleep(1.5)
-
-    def clone_webhooks(self):
-        src_channels_url = f"https://discord.com/api/v9/guilds/{self.source_guild_id}/channels"
-        tgt_channels_url = f"https://discord.com/api/v9/guilds/{self.target_guild_id}/channels"
-
-        src_ch_resp = self.session.get(src_channels_url, headers=self.headers)
-        if src_ch_resp.status_code != 200:
-            print(gradient_text_failer(f"[x] Failed to fetch source channels: {src_ch_resp.text}"))
-            return
-
-        tgt_ch_resp = self.session.get(tgt_channels_url, headers=self.headers)
-        if tgt_ch_resp.status_code != 200:
-            print(gradient_text_failer(f"[x] Failed to fetch target channels: {tgt_ch_resp.text}"))
-            return
-
-        source_channels = src_ch_resp.json()
-        target_channels = tgt_ch_resp.json()
-        tgt_name_map = {ch['name']: ch['id'] for ch in target_channels}
-
-        for src_ch in source_channels:
-            ch_id = src_ch['id']
-            ch_name = src_ch['name']
-            wh_resp = self.session.get(f"https://discord.com/api/v9/channels/{ch_id}/webhooks", headers=self.headers)
-            if wh_resp.status_code != 200:
-                continue
-            webhooks = wh_resp.json()
-            for wh in webhooks:
-                target_ch_id = tgt_name_map.get(ch_name)
-                if target_ch_id:
-                    data = {
-                        "name": wh['name'],
-                        "avatar": wh.get('avatar'),
-                    }
-                    cr = self.session.post(f"https://discord.com/api/v9/channels/{target_ch_id}/webhooks",
-                                    headers=self.headers, json=data)
-                    if cr.status_code == 200:
-                        print(gradient_text_success(f"[✓] Cloned webhook '{wh['name']}' in {ch_name}"))
-                    else:
-                        print(gradient_text_failer(f"[x] Failed to clone webhook '{wh['name']}': {cr.text}"))
-                    time.sleep(1.5)
-
-    def clone_stickers(self):
-        print(gradient_text_ascii("[~] Cloning stickers..."))
-
-        url = f"https://discord.com/api/v9/guilds/{self.source_guild_id}/stickers"
-        r = self.session.get(url, headers=self.headers)
-        if r.status_code != 200:
-            print(gradient_text_failer(f"[x] Failed to fetch source stickers: {r.text}"))
-            return
-
-        stickers = r.json()
-        if not stickers:
-            print(gradient_text_failer("[~] No stickers found in source server."))
-            return
-
-        for sticker in stickers:
-            try:
-                name = sticker.get("name", "sticker")
-                description = sticker.get("description", "")
-                tags = sticker.get("tags", "")
-
-                sticker_url = f"https://cdn.discordapp.com/stickers/{sticker['id']}.png"
-                if sticker.get("format_type") == 2:  
-                    sticker_url = f"https://cdn.discordapp.com/stickers/{sticker['id']}.png"
-                elif sticker.get("format_type") == 3: 
-                    sticker_url = f"https://cdn.discordapp.com/stickers/{sticker['id']}.json"
-
-                sticker_data = requests.get(sticker_url).content
-                file_base64 = base64.b64encode(sticker_data).decode("utf-8")
-
-                payload = {
-                    "name": name,
-                    "description": description,
-                    "tags": tags,
-                    "file": f"data:image/png;base64,{file_base64}"
-                }
-
-                create_url = f"https://discord.com/api/v9/guilds/{self.target_guild_id}/stickers"
-                resp = self.session.post(create_url, headers=self.headers, json=payload)
-
-                if resp.status_code == 201:
-                    print(gradient_text_success(f"[+] Cloned sticker: {name}"))
-                elif resp.status_code == 429:
-                    print(gradient_text_failer("[RATELIMIT] API is in mood clearly"))
-                    retry_after = resp.json().get("retry_after", 1)
-                    time.sleep(retry_after + 0.5)
-                    self.clone_stickers()  
-                    return
-                else:
-                    error_json = resp.json()
-                    if error_json.get("code") == 30039:
-                        print(gradient_text_failer("[x] All sticker slots are already filled in the target server!"))
-                        return
-                    else:
-                        print(gradient_text_failer(f"[x] Failed to create sticker {name}: {resp.text}"))
-
-                time.sleep(1.0) 
-
-            except Exception as e:
-                print(gradient_text_failer(f"[x] Error cloning sticker: {e}"))
-
+        log.success("Backup restoration complete")
 
 
 class UtilityClonerMenu:
     def __init__(self):
-        self.size = shutil.get_terminal_size().columns
-        self.clear()
-        self.render_ascii()
+        self.size = get_terminal_size().columns
+        self.current_page = 1
+        self.total_pages = 2
+        self.token = None
+        self.username = None
+        self.pages_content = {
+            1: [
+                (" 1", "Server Name&Logo", " 2", "Clone Roles",      " 3", "Clone Emojis"),
+                (" 4", "Clone Categories", " 5", "Clone Channels",   " 6", "Create Backup"),
+                (" 7", "NSFW Flags",       " 8", "Clone Stickers",   " 9", "Clone Webhooks"),
+                ("10", "Discord&Credits",  " *", "Full Clone",       " $", "Restore Backup"),
+            ],
+            2: [
+                ("nigger")
+            ]
+        }
+        self._authenticate()
         self.main_menu()
 
-    def clear(self):
-        os.system('cls' if os.name == 'nt' else 'clear')
+    def _authenticate(self):
+        clear()
+        self._print_banner()
+        print()
+        self.token, user = load_or_prompt_token()
+        tag = user.get("username") or user.get("global_name") or "Unknown"
+        discrim = user.get("discriminator", "0")
+        self.username = f"{tag}#{discrim}" if discrim != "0" else tag
+        set_title(f"UtilityToolsV2 | ClonerV3 | Logged in as {self.username}")
+        log.success(f"Logged in as {self.username}")
+        time.sleep(0.8)
 
-    def render_ascii(self):
-        ascii_art = "\n".join([
-            ' ____ ___          _________   .__                            ____   ____________  ',
-            '|    |   \\         \\_   ___ \\  |  |   ____   ____   __________\\   \\ /   /\\_____  \\ ',
-            '|    |   /  ______ /    \\  \\/  |  |  /  _ \\ /    \\_/ __ \\_  __ \\   Y   /  /  ____/ ',
-            '|    |  /  /_____/ \\     \\____ |  |_(  <_> )   |  \\  ___/|  | \\/\\     /  /       \\ ',
-            '|______/            \\______  / |____/\\____/|___|  /\\___  >__|   \\\___/   \\__ _____\\',
-            '                           \\/                   \\/     \\/                        \\/',
-            '',
-            ''
-        ])
-        for line in ascii_art.splitlines():
-            print(gradient_text_ascii(line.center(self.size)))
-
-    def cloner_options(self):
-        options_block = f"""
-
-{'   || 1  || ~ Clone Server Name&Logo    || 2  || ~ Clone Roles       '.center(self.size)}
-{'   || 3  || ~ Clone Emojis              || 4  || ~ Clone Categories  '.center(self.size)}
-{'   || 5  || ~ Clone Channels            || 6  || ~ CReate A Backup   '.center(self.size)}
-{'   || 7  || ~ Clone NSFW Flags          || 8  || ~ Clone Stickers    '.center(self.size)}
-{'   || 9  || ~ Clone Webhooks            || 10 || ~ Discord&Credits   '.center(self.size)}
-{'---------------------------------------------------------------------'.center(self.size)}
-{'||*|| ~ FULL CLONE           ||$|| ~ Call A Backup '.center(self.size)}
+    def _print_banner(self):
+        banner = r"""
+  __  ____  _ ___ __       _______                       ____
+ / / / / /_(_) (_) /___ __/ ___/ /__  ___  ___ _____  __|_  /
+/ /_/ / __/ / / / __/ // / /__/ / _ \/ _ \/ -_) __/ |/ //_ < 
+\____/\__/_/_/_/\__/\_, /\___/_/\___/_//_/\__/_/  |___/____/ 
+                   /___/                                     
 """
-        for line in options_block.splitlines():
-            print(gradient_text_options(line))
+        for line in banner.splitlines():
+            print(gradient_text(line.center(self.size)))
+
+    def get_visible_length(self, text):
+        ansi_escape = re.compile(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])')
+        return len(ansi_escape.sub('', text))
+
+    def center_text(self, text):
+        visible_len = self.get_visible_length(text)
+        padding = max(0, (self.size - visible_len) // 2)
+        return " " * padding + text
+
+    def pad_visible(self, text, width):
+        return text + (" " * max(0, width - self.get_visible_length(text)))
+
+    def format_option(self, num, label):
+        return f"{Fore.WHITE}{num}{Style.RESET_ALL}{gradient_text(' ~>')} {Fore.LIGHTCYAN_EX}{label}{Style.RESET_ALL}"
+
+    def format_row(self, n1, l1, n2, l2, n3, l3):
+        col_w = 32
+        c1 = self.pad_visible(self.format_option(n1, l1) if n1.strip() else "", col_w)
+        c2 = self.pad_visible(self.format_option(n2, l2) if n2.strip() else "", col_w)
+        c3 = self.pad_visible(self.format_option(n3, l3) if n3.strip() else "", col_w)
+        return self.center_text(f"{c1} {c2} {c3}")
+
+    def format_nav_row(self):
+        col_w = 32
+        total = col_w * 3 + 2
+        has_prev = self.current_page > 1
+        has_next = self.current_page < self.total_pages
+        prev = gradient_text("<< Prev") if has_prev else ""
+        nxt = gradient_text("Next >>") if has_next else ""
+        pv = self.get_visible_length(prev)
+        nv = self.get_visible_length(nxt)
+        if has_prev and has_next:
+            row = prev + " " * (total - pv - nv) + nxt
+        elif has_prev:
+            row = prev
+        elif has_next:
+            row = " " * (total - nv) + nxt
+        else:
+            row = ""
+        return self.center_text(row)
+
+    def get_page_content(self):
+        rows = self.pages_content.get(self.current_page, [])
+        lines = ["\n"]
+        for row in rows:
+            lines.append(self.format_row(*row))
+        lines.append("")
+        lines.append(self.format_nav_row())
+        return "\n".join(lines)
+
+    def display(self):
+        clear()
+        self._print_banner()
+        print()
+        print(self.center_text(gradient_text(f"Logged in as: {self.username}")))
+        print(self.get_page_content())
+        print()
+        page_ind = f"{gradient_text('[')} {self.current_page}/{self.total_pages} {gradient_text(']')}"
+        print(self.center_text(page_ind))
+        print()
+
+    def get_choice(self):
+        return input(
+            f"      {gradient_text('[')} {Fore.WHITE}UtilityToolsV2{Style.RESET_ALL} {gradient_text(']')} {gradient_text('~>')} "
+        ).strip()
 
     def show_credits(self):
-        credits = [
+        clear()
+        self._print_banner()
+        lines = [
             "Discord ~ discord.gg/utilitytools",
             "Owner & Dev ~ xritura01",
-            "Ui ~ resil1x",
-            "Thank you for using our script",
+            "UI ~ resil1x",
+            "Thank you for using our script!",
             "Hope you have a nice day!"
         ]
         print("\n")
-        for line in credits:
-            print(gradient_text_ascii(line.center(self.size)))
-        print("\n" * 2)
-        input(gradient_text_ascii("Press Enter to return..."))
+        for line in lines:
+            print(gradient_text(line.center(self.size)))
+        print("\n")
+        input(gradient_text("      Press Enter to continue..."))
+
+    def _get_ids(self, need_target=True):
+        source = log.input("Source Guild ID")
+        target = log.input("Target Guild ID") if need_target else None
+        return source, target
+
+    def _build(self, source, target=None):
+        return UtilityClonerFunctions(self.token, source, target)
 
     def main_menu(self):
         while True:
-            self.clear()
-            self.render_ascii()
-            self.cloner_options()
-            choice = input(gradient_text_ascii("\n ~ ")).strip()
+            self.display()
+            choice = self.get_choice()
 
-            if choice == "1":
+            if choice == "<<" and self.current_page > 1:
+                self.current_page -= 1
+                continue
+            if choice == ">>" and self.current_page < self.total_pages:
+                self.current_page += 1
+                continue
 
-                try:
-                    with open("data/token.txt", "r") as f:
-                        token = f.read().strip()
-                    source_id = input(gradient_text_ascii("Enter Source Guild ID ~ ")).strip()
-                    target_id = input(gradient_text_ascii("Enter Target Guild ID ~ ")).strip()
-                    cloner = UtilityClonerFunctions(token, source_id, target_id)
-                    cloner.clone_server_details()
-                    input(gradient_text_ascii("\n[✓] Cloning complete. Press Enter to return..."))
-                except Exception as e:
-                    print(gradient_text_failer(f"[x] Error: {e}"))
-                    input(gradient_text_ascii("\nPress Enter to return..."))
-
-            elif choice == "2":
-                try:
-                    with open("data/token.txt", "r") as f:
-                        token = f.read().strip()
-                    source_id = input(gradient_text_ascii("Enter Source Guild ID ~ ")).strip()
-                    target_id = input(gradient_text_ascii("Enter Target Guild ID ~ ")).strip()
-                    cloner = UtilityClonerFunctions(token, source_id, target_id)
-                    cloner.clone_roles()
-                    input(gradient_text_ascii("\n[✓] Roles cloned. Press Enter to return..."))
-                except Exception as e:
-                    print(gradient_text_failer(f"[x] Error: {e}"))
-                    input(gradient_text_ascii("\nPress Enter to return..."))
-
-            elif choice == "3":
-                try:
-                    with open("data/token.txt", "r") as f:
-                        token = f.read().strip()
-                    source_id = input(gradient_text_ascii("Enter Source Guild ID ~ ")).strip()
-                    target_id = input(gradient_text_ascii("Enter Target Guild ID ~ ")).strip()
-                    cloner = UtilityClonerFunctions(token, source_id, target_id)
-                    cloner.clone_emojis()
-                    input(gradient_text_ascii("\n[✓] Emoji cloning complete. Press Enter to return..."))
-                except Exception as e:
-                    print(gradient_text_failer(f"[x] Error: {e}"))
-                    input(gradient_text_ascii("\nPress Enter to return..."))
-
-            elif choice == "4":
-                try:
-                    with open("data/token.txt", "r") as f:
-                        token = f.read().strip()
-                    source_id = input(gradient_text_ascii("Enter Source Guild ID ~ ")).strip()
-                    target_id = input(gradient_text_ascii("Enter Target Guild ID ~ ")).strip()
-                    cloner = UtilityClonerFunctions(token, source_id, target_id)
-                    channels = cloner.fetch_source_channels()
-                    categories = [c for c in channels if c["type"] == 4]
-                    for category in categories:
-                        cloner.create_category_in_target(category)
-                    input(gradient_text_ascii("\n[✓] Categories cloned. Press Enter to return..."))
-                except Exception as e:
-                    print(gradient_text_failer(f"[x] Error: {e}"))
-                    input(gradient_text_ascii("\nPress Enter to return..."))
-
-            elif choice == "5":
-                try:
-                    with open("data/token.txt", "r") as f:
-                        token = f.read().strip()
-                    source_id = input(gradient_text_ascii("Enter Source Guild ID ~ ")).strip()
-                    target_id = input(gradient_text_ascii("Enter Target Guild ID ~ ")).strip()
-                    cloner = UtilityClonerFunctions(token, source_id, target_id)
-                    cloner.clone_channels()
-                    input(gradient_text_ascii("\n[✓] Cloning complete. Press Enter to return..."))
-                except Exception as e:
-                    print(gradient_text_failer(f"[x] Error: {e}"))
-                    input(gradient_text_ascii("\nPress Enter to return..."))
-
-            elif choice == "6":
-                try:
-                    with open("data/token.txt", "r") as f:
-                        token = f.read().strip()
-                    source_id = input(gradient_text_ascii("Enter Source Guild ID ~ ")).strip()
-                    cloner = UtilityClonerFunctions(token, source_id, None)
-                    cloner.create_backup()
-                    input(gradient_text_ascii("\n[✓] Backup created. Press Enter to return..."))
-                except Exception as e:
-                    print(gradient_text_failer(f"[x] Error: {e}"))
-                    input(gradient_text_ascii("\nPress Enter to return..."))
-
-            elif choice == "7":
-                try:
-                    with open("data/token.txt", "r") as f:
-                        token = f.read().strip()
-                    source_id = input(gradient_text_ascii("Enter Source Guild ID ~ ")).strip()
-                    target_id = input(gradient_text_ascii("Enter Target Guild ID ~ ")).strip()
-                    cloner = UtilityClonerFunctions(token, source_id, target_id)
-                    cloner.clone_nsfw_flags()
-                    input(gradient_text_ascii("\n[✓] NSFW flags cloned. Press Enter to return..."))
-                except Exception as e:
-                    print(gradient_text_failer(f"[x] Error: {e}"))
-                    input(gradient_text_ascii("\nPress Enter to return..."))
-
-            elif choice == "8":
-                try:
-                    with open("data/token.txt", "r") as f:
-                        token = f.read().strip()
-                    source_id = input(gradient_text_ascii("Enter Source Guild ID ~ ")).strip()
-                    target_id = input(gradient_text_ascii("Enter Target Guild ID ~ ")).strip()
-                    cloner = UtilityClonerFunctions(token, source_id, target_id)
-                    cloner.clone_stickers()
-                    input(gradient_text_ascii("\n[✓] Sticker cloning complete. Press Enter to return..."))
-                except Exception as e:
-                    print(gradient_text_failer(f"[x] Error: {e}"))
-                    input(gradient_text_ascii("\nPress Enter to return..."))
-
-            elif choice == "9":
-                try:
-                    with open("data/token.txt", "r") as f:
-                        token = f.read().strip()
-                    source_id = input(gradient_text_ascii("Enter Source Guild ID ~ ")).strip()
-                    target_id = input(gradient_text_ascii("Enter Target Guild ID ~ ")).strip()
-                    cloner = UtilityClonerFunctions(token, source_id, target_id)
-                    cloner.clone_webhooks()
-                    input(gradient_text_ascii("\n[✓] Webhooks cloned. Press Enter to return..."))
-                except Exception as e:
-                    print(gradient_text_failer(f"[x] Error: {e}"))
-                    input(gradient_text_ascii("\nPress Enter to return..."))
-
-            elif choice == "10":
-                self.clear()
-                self.render_ascii()
-                self.show_credits()
-
-            elif choice == "*":
-                try:
-                    with open("data/token.txt", "r") as f:
-                        token = f.read().strip()
-                    source_id = input(gradient_text_ascii("Enter Source Guild ID ~ ")).strip()
-                    target_id = input(gradient_text_ascii("Enter Target Guild ID ~ ")).strip()
-                    
-                    confirm = input(gradient_text_failer("WARNING: This will overwrite server! Continue? (y/n) ")).lower()
-                    if confirm != 'y':
+            try:
+                if choice == "1":
+                    s, t = self._get_ids()
+                    self._build(s, t).clone_server_details()
+                elif choice == "2":
+                    s, t = self._get_ids()
+                    self._build(s, t).clone_roles()
+                elif choice == "3":
+                    s, t = self._get_ids()
+                    self._build(s, t).clone_emojis()
+                elif choice == "4":
+                    s, t = self._get_ids()
+                    c = self._build(s, t)
+                    for cat in [ch for ch in c.fetch_source_channels() if ch["type"] == 4]:
+                        c.create_category_in_target(cat)
+                elif choice == "5":
+                    s, t = self._get_ids()
+                    self._build(s, t).clone_channels()
+                elif choice == "6":
+                    source = log.input("Source Guild ID")
+                    self._build(source, None).create_backup()
+                elif choice == "7":
+                    s, t = self._get_ids()
+                    self._build(s, t).clone_nsfw_flags()
+                elif choice == "8":
+                    s, t = self._get_ids()
+                    self._build(s, t).clone_stickers()
+                elif choice == "9":
+                    s, t = self._get_ids()
+                    self._build(s, t).clone_webhooks()
+                elif choice == "10":
+                    self.show_credits()
+                    continue
+                elif choice == "*":
+                    s, t = self._get_ids()
+                    if not log.confirm("This will overwrite the target server. Continue?"):
                         continue
-                        
-                    cloner = UtilityClonerFunctions(token, source_id, target_id)
-                                 
-                    cloner.clone_server_details()
-                    cloner.clone_channels()
-                    cloner.clone_roles()
-                    cloner.clone_stickers()
-                    cloner.clone_emojis()
-                    cloner.clone_nsfw_flags()
-                    cloner.clone_webhooks()
-                    
-                    input(gradient_text_ascii("\n[✓] FULL CLONE complete! Press Enter to return..."))
-                except Exception as e:
-                    print(gradient_text_failer(f"[x] Error: {e}"))
-                    input(gradient_text_ascii("\nPress Enter to return..."))
-
-            elif choice == "$":
-                backups = [f for f in os.listdir("backups") if f.endswith(".json")]
-                if not backups:
-                    print(gradient_text_failer("[x] No backups found"))
-                else:
-                    print(gradient_text_ascii("[~] Available Backups:"))
-                    for i, backup in enumerate(backups, 1):
-                        print(f"{i}. {backup}")
-
-                    try:
-                        backup_num = int(input(gradient_text_ascii("Select backup number ~ ")).strip())
-                        if not (1 <= backup_num <= len(backups)):
-                            print(gradient_text_failer("[x] Invalid backup number"))
+                    c = self._build(s, t)
+                    c.clone_server_details()
+                    c.clone_channels()
+                    c.clone_roles()
+                    c.clone_stickers()
+                    c.clone_emojis()
+                    c.clone_nsfw_flags()
+                    c.clone_webhooks()
+                    log.success("Full clone complete")
+                elif choice == "$":
+                    backups = [f for f in os.listdir("backups") if f.endswith(".json")]
+                    if not backups:
+                        log.error("No backups found")
+                    else:
+                        log.info("Available backups")
+                        for i, b in enumerate(backups, 1):
+                            print(f"      {gradient_text(str(i))}  {Fore.WHITE}{b}{Style.RESET_ALL}")
+                        num = int(log.input("Select backup number")) - 1
+                        if not (0 <= num < len(backups)):
+                            log.error("Invalid selection")
                         else:
-                            target_guild_id = input(gradient_text_ascii("Enter Target Guild ID ~ ")).strip()
-                            
-                            confirm = input(gradient_text_failer("WARNING: This will overwrite server! Continue? (y/n) ")).lower()
-                            if confirm != 'y':
-                                continue
-                                
-                            with open("data/token.txt", "r") as f:
-                                token = f.read().strip()
-               
-                            cloner = UtilityClonerFunctions(
-                                token=token,
-                                source_guild_id=None,
-                                target_guild_id=target_guild_id
-                            )
-                            cloner.restore_from_backup(backups[backup_num - 1])
-                    except ValueError:
-                        print(gradient_text_failer("[x] Please enter a valid number"))
+                            target = log.input("Target Guild ID")
+                            if log.confirm("This will overwrite the target server. Continue?"):
+                                self._build(None, target).restore_from_backup(backups[num])
+                else:
+                    log.error("Invalid option", detail=choice)
+            except Exception as e:
+                log.error("Unexpected error", detail=str(e))
 
-                input(gradient_text_success("[✓] Press Enter to return..."))
+            log.wait()
 
-            else:
-                print(gradient_text_ascii(f"\n[!] Invalid option: {choice}"))
-                input(gradient_text_ascii("Press Enter to return..."))
 
 if __name__ == "__main__":
     UtilityClonerMenu()
